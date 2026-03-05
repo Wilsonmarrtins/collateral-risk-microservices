@@ -13,6 +13,7 @@ services:
       - customers-api
       - positions-api
       - collateral-api
+      - margintransfer-api  # ✅ NOVO
 
   customers-api:
     build:
@@ -46,3 +47,14 @@ services:
       - Services__PositionsBaseUrl=http://positions-api:8080
     depends_on:
       - positions-api
+
+  # ✅ NOVO: MarginTransfer API
+  margintransfer-api:
+    build:
+      context: ..
+      dockerfile: src/MarginTransfer.Api/Dockerfile
+    container_name: margintransfer-api
+    ports:
+      - "5004:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
