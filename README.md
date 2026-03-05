@@ -1,10 +1,12 @@
+
 # Collateral Risk Microservices (Didático)
 
 Este repositório contém um **projeto didático** para demonstrar, na prática, como funciona uma arquitetura de **microserviços** com:
 
-- **APIs independentes** (Customers, Positions, Collateral)
+- **APIs independentes** (Customers, Positions, Collateral, MarginTransfer)
 - **API Gateway** usando **YARP (Yet Another Reverse Proxy)**
-- **Orquestração** para subir tudo junto (via **.NET Aspire AppHost**) e também via **Docker Compose**
+- **Orquestração** via **.NET Aspire AppHost**
+- Execução alternativa via **Docker Compose**
 
 > ⚠️ **IMPORTANTE (Didático)**
 >
@@ -13,107 +15,207 @@ Este repositório contém um **projeto didático** para demonstrar, na prática,
 
 ---
 
-## 🎯 O que o projeto simula
+# 🎯 O que o projeto simula
 
-Um fluxo comum em ambientes de risco/garantias:
+Um fluxo simplificado de sistemas de **risco e collateral utilizados em bancos**.
 
 1. **Cadastrar um cliente**
-2. **Registrar posições** (simulação de compra/posse de ativos)
-3. **Calcular o collateral (garantia)** necessário com base nas posições e em regras simples de “haircut”
+2. **Registrar posições** (ativos na carteira)
+3. **Calcular o collateral / margem necessária**
+4. **Executar transferência de margem** (segregar garantia)
 
 ---
 
-## 🧩 Arquitetura e serviços
+# 🧩 Arquitetura e serviços
 
-### 1) Customers.Api
-Responsável por **cadastro de clientes**.
+## 1) Customers.Api
 
-- Cria cliente com `name` e `document`
-- Retorna um `id` (GUID) para ser usado nas demais APIs
+Responsável pelo **cadastro de clientes**.
 
-### 2) Positions.Api
-Responsável por **armazenar posições do cliente** (in-memory).
+Cria cliente com:
 
-- Uma posição representa que o cliente possui um ativo (ex.: PETR4, VALE3, AAPL etc.)
-- Campos:
-  - `customerId`
-  - `symbol`
-  - `assetType` (CASH | BOND | EQUITY)
-  - `quantity`
-  - `price`
-  - `currency`
+- `name`
+- `document`
 
-> Nesta versão didática, as posições ficam **em memória** (não persistem em banco).
+Retorna:
 
-### 3) Collateral.Api
-Responsável por **calcular exposição e collateral necessário**.
+- `customerId`
+
+Esse ID será usado nas demais APIs.
+
+---
+
+## 2) Positions.Api
+
+Responsável por armazenar as **posições financeiras do cliente**.
+
+Uma posição representa um ativo na carteira.
+
+Campos:
+
+- `customerId`
+- `symbol`
+- `assetType` (CASH | BOND | EQUITY)
+- `quantity`
+- `price`
+- `currency`
+
+> Nesta versão didática as posições são **in-memory**.
+
+---
+
+## 3) Collateral.Api
+
+Responsável por calcular:
+
+- **Exposure**
+- **Haircut**
+- **Required Collateral**
 
 Fluxo:
-- Recebe um `customerId`
-- Chama a **Positions.Api** para obter as posições desse cliente
-- Calcula:
-  - **Exposure** = `quantity * price`
-  - **Haircut** (regra simples por tipo de ativo)
-  - **RequiredCollateral** = `exposure * haircut`
-- Soma os totais e devolve um resumo
 
-### 4) Gateway.Api (YARP)
-O gateway “junta” as APIs em um único endereço e faz roteamento por path:
+1. Recebe `customerId`
+2. Busca posições na Positions.Api
+3. Calcula exposição
+4. Aplica regra de haircut
+5. Retorna margem necessária
 
-- `/customers/**` → encaminha para **Customers.Api** (`/v1/customers/**`)
-- `/positions/**` → encaminha para **Positions.Api** (`/v1/positions/**`)
-- `/collateral/**` → encaminha para **Collateral.Api** (`/v1/collateral/**`)
+### Fórmulas
 
----
+Exposure:
 
-## 🧠 Como funciona o cálculo de Collateral (didático)
+```
+exposure = quantity * price
+```
 
-O cálculo implementado é uma regra didática baseada em “haircuts”.
+Required Collateral:
 
-### Haircuts (didático)
+```
+requiredCollateral = exposure * haircut
+```
 
-- `CASH` → 0%
-- `BOND` → 10%
-- `EQUITY` → 25%
-- outros → 30%
+Haircuts (didático):
 
-### Cálculo por posição
-
-- `Exposure = quantity * price`
-- `RequiredCollateral = Exposure * Haircut`
-
-### Exemplo rápido
-
-Se o cliente tem:
-- 10 ações de PETR4 a R$ 35,00
-- `assetType = EQUITY` → haircut 25%
-
-Então:
-- `Exposure = 10 * 35 = 350`
-- `RequiredCollateral = 350 * 0.25 = 87.5`
-
-> ⚠️ Em sistemas reais, haircuts vêm de regras regulatórias, risco, volatilidade, liquidez, ratings etc.
-> Aqui é **simplificado** para facilitar o entendimento.
+```
+CASH   = 0%
+BOND   = 10%
+EQUITY = 25%
+OTHER  = 30%
+```
 
 ---
 
-## ✅ Exemplos de uso (Postman / curl)
+## 4) MarginTransfer.Api
 
-> Abaixo uso como base o **Gateway** exposto em:
->
-> `http://localhost:5000`
+Simula a **movimentação financeira da margem**.
 
-### 0) Pré-requisito
-No Postman, envie JSON com:
-- Header: `Content-Type: application/json`
+Após calcular o collateral, o sistema precisa **segregar o valor como garantia**.
+
+Essa API representa a movimentação:
+
+```
+CASH → MARGIN
+```
+
+Tipos de conta:
+
+- **CASH** → dinheiro disponível
+- **MARGIN** → dinheiro bloqueado como garantia
+
+Esse processo é conhecido como:
+
+**Simple Transfer**
 
 ---
 
-### 1) Criar cliente
+# 🔄 Fluxo completo do sistema
 
-**POST** `http://localhost:5000/customers`
+### 1️⃣ Cliente possui ativos
 
-Body:
+Exemplo:
+
+```
+20 ações do BTG
+Preço = 1000
+```
+
+```
+Exposure = 20 * 1000
+Exposure = 20000
+```
+
+---
+
+### 2️⃣ Sistema calcula o risco
+
+Haircut para ações:
+
+```
+25%
+```
+
+```
+Required Collateral = 20000 * 0.25
+Required Collateral = 5000
+```
+
+---
+
+### 3️⃣ Sistema verifica contas
+
+Exemplo:
+
+```
+CASH   = 10000
+MARGIN = 0
+```
+
+---
+
+### 4️⃣ Sistema cria uma boleta
+
+Boleta representa uma **instrução de movimentação financeira**.
+
+```
+Transferir 5000
+de CASH → MARGIN
+```
+
+---
+
+### 5️⃣ Transferência executada
+
+Após transferência:
+
+```
+CASH   = 5000
+MARGIN = 5000
+```
+
+Agora o cliente possui garantia suficiente.
+
+---
+
+# 🧪 Exemplos de uso
+
+Base URL:
+
+```
+http://localhost:5000
+```
+
+---
+
+## Criar cliente
+
+POST
+
+```
+/customers
+```
+
+Body
+
 ```json
 {
   "name": "Wilson Martins",
@@ -121,230 +223,150 @@ Body:
 }
 ```
 
-Resposta (exemplo):
-```json
-{
-  "id": "fb58614a-128a-4460-a38c-2f6e79e901b8"
-}
-```
-
-> Guarde o `id`, ele será o `customerId` nas próximas chamadas.
-
 ---
 
-### 2) Registrar posição (simular compra/posse de ativos)
+## Registrar posição
 
-**POST** `http://localhost:5000/positions`
+POST
 
-Body (exemplo em BRL):
+```
+/positions
+```
+
 ```json
 {
-  "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8",
+  "customerId": "GUID",
   "symbol": "PETR4",
   "assetType": "EQUITY",
   "quantity": 10,
-  "price": 35.00,
+  "price": 35,
   "currency": "BRL"
 }
 ```
 
-Outra posição:
-```json
-{
-  "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8",
-  "symbol": "VALE3",
-  "assetType": "EQUITY",
-  "quantity": 5,
-  "price": 70.00,
-  "currency": "BRL"
-}
-```
-
-Resposta (exemplo):
-```json
-{
-  "message": "Position upserted."
-}
-```
-
 ---
 
-### 3) Listar posições do cliente
+## Calcular collateral
 
-**GET** `http://localhost:5000/positions?customerId=fb58614a-128a-4460-a38c-2f6e79e901b8`
+POST
 
-Resposta (exemplo):
-```json
-[
-  {
-    "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8",
-    "symbol": "VALE3",
-    "assetType": "EQUITY",
-    "quantity": 5,
-    "price": 70,
-    "currency": "BRL",
-    "updatedAt": "2026-03-05T02:10:00Z"
-  },
-  {
-    "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8",
-    "symbol": "PETR4",
-    "assetType": "EQUITY",
-    "quantity": 10,
-    "price": 35,
-    "currency": "BRL",
-    "updatedAt": "2026-03-05T02:05:00Z"
-  }
-]
+```
+/collateral/calculate
 ```
 
----
-
-### 4) Calcular collateral
-
-**POST** `http://localhost:5000/collateral/calculate`
-
-Body:
 ```json
 {
-  "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8"
-}
-```
-
-Resposta (exemplo):
-```json
-{
-  "customerId": "fb58614a-128a-4460-a38c-2f6e79e901b8",
-  "totalExposure": 700,
-  "totalRequiredCollateral": 175,
-  "items": [
-    {
-      "symbol": "PETR4",
-      "assetType": "EQUITY",
-      "exposure": 350,
-      "haircut": 0.25,
-      "requiredCollateral": 87.5,
-      "currency": "BRL"
-    },
-    {
-      "symbol": "VALE3",
-      "assetType": "EQUITY",
-      "exposure": 350,
-      "haircut": 0.25,
-      "requiredCollateral": 87.5,
-      "currency": "BRL"
-    }
-  ]
+  "customerId": "GUID"
 }
 ```
 
 ---
 
-## ▶️ Como executar
+## Inicializar contas
 
-Você tem duas opções principais:
+POST
 
----
+```
+/margin/accounts/init
+```
 
-## Opção A) Executar com .NET Aspire (recomendado no DEV)
-
-1. Abra a solução no Visual Studio
-2. Defina o projeto **CollateralPlayground.AppHost** como **Startup Project**
-3. Rode (F5)
-4. Abra o **Dashboard do Aspire** e você verá:
-   - Todos os serviços
-   - Logs centralizados
-   - Links para Swagger/URLs
-
-> ✅ Vantagem: um único “start” sobe tudo e você tem observabilidade básica no dashboard.
+```json
+{
+  "customerId": "GUID",
+  "cashBalance": 10000,
+  "marginBalance": 0
+}
+```
 
 ---
 
-## Opção B) Executar com Docker Compose
+## Executar transferência de margem
 
-### Pré-requisitos
-- Docker Desktop instalado e rodando
+POST
 
-### Subir tudo
+```
+/margin/transfers/simple
+```
 
-> Este projeto possui a pasta `infra/` com o compose.
+```json
+{
+  "customerId": "GUID",
+  "amount": 5000,
+  "fromAccount": "CASH",
+  "toAccount": "MARGIN",
+  "currency": "BRL",
+  "reason": "MARGIN_ALLOCATION_FROM_COLLATERAL"
+}
+```
 
-No terminal, na **raiz do repositório** (onde estão `src/` e `infra/`), rode:
+---
 
-```bash
+# ▶️ Como executar
+
+## Opção 1 — .NET Aspire
+
+1. Abrir solução no Visual Studio
+2. Definir **AppHost** como startup
+3. Executar
+
+O dashboard exibirá:
+
+- logs
+- serviços
+- endpoints
+
+---
+
+## Opção 2 — Docker Compose
+
+Na raiz do projeto:
+
+```
 docker compose -f infra/docker-compose.yml up --build
 ```
 
-### Parar tudo
+Parar:
 
-```bash
+```
 docker compose -f infra/docker-compose.yml down
 ```
 
-### URLs (quando rodando via compose)
-Geralmente você acessa pelo **Gateway**:
+---
 
-- Gateway: `http://localhost:5000`
+# 📁 Estrutura
 
-E os serviços diretos (se você expôs portas no compose):
+```
+src/
+ ├── Gateway.Api
+ ├── Customers.Api
+ ├── Positions.Api
+ ├── Collateral.Api
+ └── MarginTransfer.Api
 
-- Customers.Api: `http://localhost:5001/swagger`
-- Positions.Api: `http://localhost:5002/swagger`
-- Collateral.Api: `http://localhost:5003/swagger`
+infra/
+ └── docker-compose.yml
 
-> Observação: as portas podem variar conforme seu `docker-compose.yml`.
+docs/
+ └── diagramas
+```
 
 ---
 
-## 🔎 Swagger
+# ✅ O que o projeto demonstra
 
-Quando rodando localmente, cada API expõe seu Swagger em `/swagger`.
-
-- Customers.Api → `/swagger`
-- Positions.Api → `/swagger`
-- Collateral.Api → `/swagger`
-
-O Gateway pode (opcionalmente) agregar endpoints do Swagger de cada serviço.
-
----
-
-## 📁 Estrutura do repositório
-
-- `src/`
-  - `Gateway.Api`
-  - `Customers.Api`
-  - `Positions.Api`
-  - `Collateral.Api`
-- `infra/`
-  - `docker-compose.yml`
-- `docs/`
-  - materiais auxiliares (prints, diagramas, etc.)
-- `CollateralPlayground/` (ou pasta similar da solução)
-  - solução/arquivos do **Aspire AppHost**
+- Arquitetura de microserviços
+- API Gateway com YARP
+- Comunicação entre APIs
+- Cálculo de risco e collateral
+- Simulação de margem
+- Transferência financeira entre contas
+- Conceitos usados em sistemas de risco bancário
 
 ---
 
-## ✅ O que este projeto demonstra
+# 👤 Autor
 
-- Separação por responsabilidade (cada serviço com seu domínio)
-- Comunicação HTTP entre serviços
-- API Gateway com YARP (reverse proxy)
-- Transforms e roteamento por path
-- Swagger para testar endpoints
-- Orquestração (Aspire) e alternativa com Docker Compose
+Wilson Martins
 
----
-
-## 🚫 O que este projeto NÃO é (limitações propositalmente didáticas)
-
-- Não possui autenticação/autorização
-- Positions é in-memory (sem banco)
-- Haircuts são regras simplificadas
-- Não tem observabilidade completa (OTel + tracing distribuído + métricas)
-- Não tem resilência avançada (retry/circuit breaker) configurada
-
----
-
-## 👤 Autor
-
-**Wilson Martins**  
-GitHub: https://github.com/Wilsonmartins
+GitHub:
+https://github.com/Wilsonmartins
