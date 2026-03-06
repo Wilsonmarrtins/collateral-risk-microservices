@@ -18,7 +18,6 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// SWAGGER UI
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -28,15 +27,12 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("https://customers-api/swagger/v1/swagger.json", "Customers API");
         c.SwaggerEndpoint("https://positions-api/swagger/v1/swagger.json", "Positions API");
         c.SwaggerEndpoint("https://collateral-api/swagger/v1/swagger.json", "Collateral API");
-
-        // ✅ NOVO: Margin Transfer
         c.SwaggerEndpoint("https://margintransfer-api/swagger/v1/swagger.json", "MarginTransfer API");
 
         c.RoutePrefix = "swagger";
     });
 }
 
-// REVERSE PROXY
 app.MapReverseProxy();
 
 app.Run();
