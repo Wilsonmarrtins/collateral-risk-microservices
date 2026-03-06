@@ -1,372 +1,282 @@
 
-# Collateral Risk Microservices (Didático)
+# Collateral Risk Microservices
+### Didactic Microservices Architecture for Collateral & Margin Simulation
 
-Este repositório contém um **projeto didático** para demonstrar, na prática, como funciona uma arquitetura de **microserviços** com:
+This repository demonstrates a **didactic microservices architecture** that simulates how **collateral and margin management systems** work inside financial institutions.
 
-- **APIs independentes** (Customers, Positions, Collateral, MarginTransfer)
-- **API Gateway** usando **YARP (Yet Another Reverse Proxy)**
-- **Orquestração** via **.NET Aspire AppHost**
-- Execução alternativa via **Docker Compose**
+The project focuses on concepts commonly found in **risk engines, custody systems, and collateral management platforms** used by investment banks and broker-dealers.
 
-> ⚠️ **IMPORTANTE (Didático)**
->
-> Este projeto **NÃO é produção**. Foi construído para **estudo** e demonstração de conceitos:
-> microserviços, comunicação HTTP entre serviços, gateway/reverse proxy, roteamento, Swagger, e orquestração.
+⚠️ **Important**
+This project is **educational only**. It simplifies many financial and architectural concepts in order to demonstrate:
 
----
+- Microservices architecture
+- API Gateway pattern
+- Service communication
+- Collateral and margin calculations
+- Financial system concepts (custody, collateral, margin allocation)
 
-# 🎯 O que o projeto simula
-
-Um fluxo simplificado de sistemas de **risco e collateral utilizados em bancos**.
-
-1. **Cadastrar um cliente**
-2. **Registrar posições** (ativos na carteira)
-3. **Calcular o collateral / margem necessária**
-4. **Executar transferência de margem** (segregar garantia)
+It is **not intended for production use**.
 
 ---
 
-# 🧩 Arquitetura e serviços
+# 🎯 What This Project Demonstrates
 
-## 1) Customers.Api
+This project simulates a simplified **Collateral Risk Flow** used by financial institutions.
 
-Responsável pelo **cadastro de clientes**.
+Typical real-world flow:
 
-Cria cliente com:
-
-- `name`
-- `document`
-
-Retorna:
-
-- `customerId`
-
-Esse ID será usado nas demais APIs.
+1. A **client exists in the system**
+2. The client **holds financial positions**
+3. A **risk engine calculates exposure**
+4. The system determines **required collateral**
+5. If needed, the system **segregates margin**
+6. Funds are transferred from **cash account → margin account**
 
 ---
 
-## 2) Positions.Api
+# 🧠 Real Financial Concepts Modeled
 
-Responsável por armazenar as **posições financeiras do cliente**.
+The project introduces simplified versions of concepts used in banking environments:
 
-Uma posição representa um ativo na carteira.
-
-Campos:
-
-- `customerId`
-- `symbol`
-- `assetType` (CASH | BOND | EQUITY)
-- `quantity`
-- `price`
-- `currency`
-
-> Nesta versão didática as posições são **in-memory**.
+| Concept | Description |
+|------|------|
+| Exposure | Total financial value of a position |
+| Collateral | Financial guarantee protecting the institution |
+| Margin | Portion of collateral that must be segregated |
+| Haircut | Risk adjustment applied to an asset |
+| Custody | Systems responsible for holding assets |
+| Margin Allocation | Movement of funds to margin accounts |
+| Simple Transfer | Transfer between internal accounts |
 
 ---
 
-## 3) Collateral.Api
+# 🧩 Architecture Overview
 
-Responsável por calcular:
-
-- **Exposure**
-- **Haircut**
-- **Required Collateral**
-
-Fluxo:
-
-1. Recebe `customerId`
-2. Busca posições na Positions.Api
-3. Calcula exposição
-4. Aplica regra de haircut
-5. Retorna margem necessária
-
-### Fórmulas
-
-Exposure:
+The system is composed of multiple microservices:
 
 ```
-exposure = quantity * price
-```
-
-Required Collateral:
-
-```
-requiredCollateral = exposure * haircut
-```
-
-Haircuts (didático):
-
-```
-CASH   = 0%
-BOND   = 10%
-EQUITY = 25%
-OTHER  = 30%
+                ┌──────────────────────┐
+                │      API Gateway     │
+                │       (YARP)         │
+                └──────────┬───────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+ ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+ │ Customers   │   │ Positions   │   │  Collateral │
+ │   Service   │   │   Service   │   │   Service   │
+ └─────────────┘   └─────────────┘   └──────┬──────┘
+                                            │
+                                    ┌─────────────┐
+                                    │ MarginTransfer│
+                                    │    Service    │
+                                    └─────────────┘
 ```
 
 ---
 
-## 4) MarginTransfer.Api
+# 📦 Services
 
-Simula a **movimentação financeira da margem**.
+## Customers.Api
 
-Após calcular o collateral, o sistema precisa **segregar o valor como garantia**.
+Responsible for **client registration**.
 
-Essa API representa a movimentação:
+Creates a new customer record containing:
+
+- Name
+- Document
+- Generated CustomerId (GUID)
+
+The `customerId` becomes the primary identifier used across all services.
+
+---
+
+## Positions.Api
+
+Stores **financial positions held by a client**.
+
+A position represents ownership of an asset.
+
+Example:
+
+Customer owns 20 shares of BTG  
+Price = 1000
+
+Fields:
+
+- customerId
+- symbol
+- assetType
+- quantity
+- price
+- currency
+
+⚠️ Positions are **stored in memory** in this didactic version.
+
+---
+
+## Collateral.Api
+
+Simulates a **risk engine** responsible for computing collateral requirements.
+
+Process:
+
+1. Receive `customerId`
+2. Query positions
+3. Calculate exposure
+4. Apply haircut rules
+5. Return required collateral
+
+---
+
+# 📊 Collateral Calculation Logic
+
+Exposure
+
+```
+Exposure = Quantity × Price
+```
+
+Example:
+
+```
+20 shares × 1000 = 20000 exposure
+```
+
+Haircut rules
+
+| Asset | Haircut |
+|------|---------|
+| CASH | 0% |
+| BOND | 10% |
+| EQUITY | 25% |
+
+Required Collateral
+
+```
+RequiredCollateral = Exposure × Haircut
+```
+
+Example:
+
+```
+20000 × 0.25 = 5000
+```
+
+---
+
+# 💰 MarginTransfer.Api
+
+Simulates **margin allocation**.
+
+Two internal accounts:
+
+| Account | Meaning |
+|-------|---------|
+| CASH | Available funds |
+| MARGIN | Collateral locked as guarantee |
+
+Example flow:
+
+Before transfer
+
+```
+CASH = 10000
+MARGIN = 0
+```
+
+Required collateral
+
+```
+5000
+```
+
+Transfer executed
 
 ```
 CASH → MARGIN
 ```
 
-Tipos de conta:
-
-- **CASH** → dinheiro disponível
-- **MARGIN** → dinheiro bloqueado como garantia
-
-Esse processo é conhecido como:
-
-**Simple Transfer**
-
----
-
-# 🔄 Fluxo completo do sistema
-
-### 1️⃣ Cliente possui ativos
-
-Exemplo:
+After transfer
 
 ```
-20 ações do BTG
-Preço = 1000
-```
-
-```
-Exposure = 20 * 1000
-Exposure = 20000
-```
-
----
-
-### 2️⃣ Sistema calcula o risco
-
-Haircut para ações:
-
-```
-25%
-```
-
-```
-Required Collateral = 20000 * 0.25
-Required Collateral = 5000
-```
-
----
-
-### 3️⃣ Sistema verifica contas
-
-Exemplo:
-
-```
-CASH   = 10000
-MARGIN = 0
-```
-
----
-
-### 4️⃣ Sistema cria uma boleta
-
-Boleta representa uma **instrução de movimentação financeira**.
-
-```
-Transferir 5000
-de CASH → MARGIN
-```
-
----
-
-### 5️⃣ Transferência executada
-
-Após transferência:
-
-```
-CASH   = 5000
+CASH = 5000
 MARGIN = 5000
 ```
 
-Agora o cliente possui garantia suficiente.
-
 ---
 
-# 🧪 Exemplos de uso
-
-Base URL:
+# 🔄 Full Collateral Workflow
 
 ```
-http://localhost:5000
-```
-
----
-
-## Criar cliente
-
-POST
-
-```
-/customers
-```
-
-Body
-
-```json
-{
-  "name": "Wilson Martins",
-  "document": "39700427803"
-}
+Client
+   │
+   ▼
+Positions recorded
+   │
+   ▼
+Exposure calculated
+   │
+   ▼
+Haircut applied
+   │
+   ▼
+Required Collateral computed
+   │
+   ▼
+Margin Allocation
+   │
+   ▼
+Funds transferred to Margin Account
 ```
 
 ---
 
-## Registrar posição
+# 📡 API Gateway
 
-POST
+The gateway exposes a unified entry point.
 
-```
-/positions
-```
+Routes:
 
-```json
-{
-  "customerId": "GUID",
-  "symbol": "PETR4",
-  "assetType": "EQUITY",
-  "quantity": 10,
-  "price": 35,
-  "currency": "BRL"
-}
-```
+- /customers
+- /positions
+- /collateral
+- /margin
 
 ---
 
-## Calcular collateral
+# ▶️ Running the Project
 
-POST
+## Aspire
 
-```
-/collateral/calculate
-```
+1. Open solution
+2. Run AppHost
+3. Access dashboard
 
-```json
-{
-  "customerId": "GUID"
-}
-```
-
----
-
-## Inicializar contas
-
-POST
-
-```
-/margin/accounts/init
-```
-
-```json
-{
-  "customerId": "GUID",
-  "cashBalance": 10000,
-  "marginBalance": 0
-}
-```
-
----
-
-## Executar transferência de margem
-
-POST
-
-```
-/margin/transfers/simple
-```
-
-```json
-{
-  "customerId": "GUID",
-  "amount": 5000,
-  "fromAccount": "CASH",
-  "toAccount": "MARGIN",
-  "currency": "BRL",
-  "reason": "MARGIN_ALLOCATION_FROM_COLLATERAL"
-}
-```
-
----
-
-# ▶️ Como executar
-
-## Opção 1 — .NET Aspire
-
-1. Abrir solução no Visual Studio
-2. Definir **AppHost** como startup
-3. Executar
-
-O dashboard exibirá:
-
-- logs
-- serviços
-- endpoints
-
----
-
-## Opção 2 — Docker Compose
-
-Na raiz do projeto:
+## Docker
 
 ```
 docker compose -f infra/docker-compose.yml up --build
 ```
 
-Parar:
+---
+
+# 📁 Structure
 
 ```
-docker compose -f infra/docker-compose.yml down
+src
+ ├ Gateway.Api
+ ├ Customers.Api
+ ├ Positions.Api
+ ├ Collateral.Api
+ └ MarginTransfer.Api
+
+infra
+ └ docker-compose.yml
 ```
 
 ---
 
-# 📁 Estrutura
-
-```
-src/
- ├── Gateway.Api
- ├── Customers.Api
- ├── Positions.Api
- ├── Collateral.Api
- └── MarginTransfer.Api
-
-infra/
- └── docker-compose.yml
-
-docs/
- └── diagramas
-```
-
----
-
-# ✅ O que o projeto demonstra
-
-- Arquitetura de microserviços
-- API Gateway com YARP
-- Comunicação entre APIs
-- Cálculo de risco e collateral
-- Simulação de margem
-- Transferência financeira entre contas
-- Conceitos usados em sistemas de risco bancário
-
----
-
-# 👤 Autor
+# 👤 Author
 
 Wilson Martins
-
-GitHub:
-https://github.com/Wilsonmartins
